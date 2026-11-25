@@ -1,0 +1,189 @@
+name: Motoopaint F-Droid Server Repo
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-fdroid-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+
+      - name: Prepare debug keystore
+        run: |
+          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
+            base64 --decode debug.keystore.base64 > debug.keystore
+          fi
+
+      - name: Build APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          gradle :app:assembleDebug
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > my-upload-key.jks
+            gradle :app:assembleRelease
+          fi
+
+      - name: Set up Python & fdroidserver
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install fdroidserver
+        run: |
+          python -m pip install --upgrade pip
+          pip install fdroidserver
+
+      - name: Build F-Droid Repository with fdroidserver
+        env:
+          FDROID_KEYSTORE_BASE64: ${{ secrets.FDROID_KEYSTORE_BASE64 }}
+          FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
+          FDROID_KEY_PASS: ${{ secrets.FDROID_KEY_PASS }}
+          FDROID_KEY_ALIAS: ${{ secrets.FDROID_KEY_ALIAS }}
+        run: |
+          REPO_NAME_SLUG="${GITHUB_REPOSITORY#*/}"
+          PAGES_BASE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME_SLUG}"
+          FDROID_DIR="$PWD/fdroid-site"
+          mkdir -p "$FDROID_DIR/repo" "$FDROID_DIR/metadata" "$FDROID_DIR/fastlane/metadata/android/en-US/images"
+
+          # Copy Fastlane metadata and launcher icon
+          cp -r fastlane/metadata/android/en-US/* "$FDROID_DIR/fastlane/metadata/android/en-US/"
+          cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$FDROID_DIR/fastlane/metadata/android/en-US/images/icon.png"
+          cp app/src/main/res/mipmap-xxxhdpi/ic_launcher.png "$FDROID_DIR/repo/icon.png"
+
+          # Copy signed release APK when available, otherwise debug APK
+          APK_SRC=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -n 1 || true)
+          if [ -z "$APK_SRC" ]; then
+            APK_SRC=$(ls app/build/outputs/apk/debug/*.apk | head -n 1)
+          fi
+          APK_FILE=$(basename "$APK_SRC")
+          cp "$APK_SRC" "$FDROID_DIR/repo/$APK_FILE"
+
+          # Prepare repository signing keystore (persistent secret recommended for production)
+          KEY_ALIAS="${FDROID_KEY_ALIAS:-fdroidrepo}"
+          KEYSTORE_PASS="${FDROID_KEYSTORE_PASS:-motoopaintfdroid}"
+          KEY_PASS="${FDROID_KEY_PASS:-$KEYSTORE_PASS}"
+
+          if [ -n "$FDROID_KEYSTORE_BASE64" ]; then
+            echo "$FDROID_KEYSTORE_BASE64" | base64 --decode > "$FDROID_DIR/keystore.p12"
+          else
+            keytool -genkeypair -noprompt \
+              -keystore "$FDROID_DIR/keystore.p12" \
+              -storetype PKCS12 \
+              -storepass "$KEYSTORE_PASS" \
+              -keypass "$KEY_PASS" \
+              -alias "$KEY_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Motoopaint F-Droid Repo, O=Motoopaint, C=KE"
+          fi
+
+          cat > "$FDROID_DIR/config.yml" <<EOF
+          repo_url: "${PAGES_BASE_URL}/repo"
+          repo_name: "Motoopaint F-Droid Repository"
+          repo_icon: "icon.png"
+          repo_description: "Offline Kenyan automotive paint, photo masking, livery & workshop stock APK feed."
+          keystore: "$FDROID_DIR/keystore.p12"
+          keystorepass: "$KEYSTORE_PASS"
+          keypass: "$KEY_PASS"
+          repo_keyalias: "$KEY_ALIAS"
+          archive_older: 0
+          EOF
+
+          # Ensure Android SDK build-tools (apksigner / aapt2) are discoverable by fdroidserver
+          if [ -z "${ANDROID_HOME:-}" ] && [ -d "/usr/local/lib/android/sdk" ]; then
+            export ANDROID_HOME="/usr/local/lib/android/sdk"
+          fi
+
+          cd "$FDROID_DIR"
+          fdroid update --create-metadata --use-date-from-apk
+
+          FINGERPRINT=$(keytool -list -v -keystore "$FDROID_DIR/keystore.p12" -storepass "$KEYSTORE_PASS" -alias "$KEY_ALIAS" | grep -E "SHA256:" | head -n 1 | sed 's/.*SHA256: //')
+
+          cat > "$FDROID_DIR/index.html" <<HTML
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>Motoopaint — F-Droid Repository</title>
+            <style>
+              body { font-family: system-ui, sans-serif; max-width: 680px; margin: 40px auto; padding: 0 20px; background: #12151C; color: #F5F7FA; }
+              .card { background: #1B202B; border: 1px solid #2D3546; border-radius: 16px; padding: 24px; }
+              .btn { display: inline-block; background: #D95D1E; color: #fff; text-decoration: none; padding: 12px 18px; border-radius: 10px; font-weight: 600; margin: 8px 8px 0 0; }
+              .btn-alt { background: #2D3546; }
+              code { display: block; background: #0E1117; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 13px; margin: 10px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>Motoopaint F-Droid Repository</h1>
+              <p>Add this repository URL in the <strong>F-Droid Client</strong> app on Android, or download the APK directly below.</p>
+              <p><strong>Repository URL:</strong></p>
+              <code>${PAGES_BASE_URL}/repo</code>
+              <p><strong>SHA-256 Fingerprint:</strong></p>
+              <code>${FINGERPRINT}</code>
+              <a class="btn" href="fdroidrepos://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME_SLUG}/repo">Open in F-Droid Client</a>
+              <a class="btn btn-alt" href="./repo/${APK_FILE}">Download APK Directly</a>
+            </div>
+          </body>
+          </html>
+          HTML
+
+      - name: Upload F-Droid Repo Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: motoopaint-fdroid-repo
+          path: |
+            fdroid-site/repo
+            fdroid-site/index.html
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: fdroid-site
+
+  deploy-pages:
+    needs: build-fdroid-repo
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

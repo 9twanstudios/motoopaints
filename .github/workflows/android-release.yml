@@ -2,9 +2,23 @@ name: Motoopaint Android Release
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Version tag to publish a GitHub Release (e.g. v1.0.0). Leave empty for build-only.'
+        required: false
+        default: ''
+        type: string
+      prerelease:
+        description: 'Mark GitHub Release as pre-release'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -62,9 +76,13 @@ jobs:
           if-no-files-found: ignore
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          name: Motoopaint ${{ inputs.release_tag || github.ref_name }}
+          prerelease: ${{ inputs.prerelease || false }}
+          fail_on_unmatched_files: false
           files: |
             app/build/outputs/apk/**/*.apk
             app/build/outputs/bundle/**/*.aab

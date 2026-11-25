@@ -10,7 +10,17 @@ Motoopaint is a 100% offline Android application for Kenya's automotive painters
 - **Workshop Stock, Local Analytics & Backup**: Manage inventory with low-stock alerts, review on-device analytics, switch Daylight / Dark Booth themes, and export/restore JSON backups via Android's Storage Access Framework.
 
 ## GitHub Releases
-1. Use AI Studio's **Settings -> Push to GitHub** (or `git push`) to push the codebase to your GitHub repository.
-2. Push a version tag (e.g. `git tag v1.0.0 && git push origin v1.0.0`) or create a tag in GitHub Releases to trigger `.github/workflows/android-release.yml`, which runs `:app:testDebugUnitTest`, builds APKs/AABs, and publishes a GitHub Release automatically.
-3. Optional: to publish signed release APKs/AABs in CI, add repository secrets `KEYSTORE_BASE64`, `STORE_PASSWORD`, and `KEY_PASSWORD` (otherwise a debug APK is attached automatically).
+1. Open AI Studio's **Settings** menu and choose **Push to GitHub** to sync the project to your repository (every push to `main`/`master` runs tests and builds downloadable APK artifacts).
+2. Publish a GitHub Release in either of two ways:
+   - **From GitHub UI**: Open **Actions -> Motoopaint Android Release -> Run workflow**, enter a `release_tag` (e.g. `v1.0.0`), and run.
+   - **From Git CLI**: Push a version tag (`git tag v1.0.0 && git push origin v1.0.0`).
+3. Optional: add repository secrets `KEYSTORE_BASE64`, `STORE_PASSWORD`, and `KEY_PASSWORD` to attach signed release APKs and AABs automatically.
+
+## F-Droid Server & F-Droid Client
+`.github/workflows/fdroid-repo.yml` uses `fdroidserver` to publish an F-Droid Client repository and direct APK download page on GitHub Pages:
+1. After pushing to GitHub, open **Settings -> Pages** in your GitHub repository and set **Source** to **GitHub Actions**.
+2. Wait for **Motoopaint F-Droid Server Repo** to finish, then open `https://<your-github-username>.github.io/<repo-name>/` on your phone to tap **Open in F-Droid Client** (or add `https://<your-github-username>.github.io/<repo-name>/repo` inside F-Droid -> Settings -> Repositories) or download the APK directly.
+3. For persistent F-Droid repository signing across updates, add secrets `FDROID_KEYSTORE_BASE64`, `FDROID_KEYSTORE_PASS`, `FDROID_KEY_PASS`, and `FDROID_KEY_ALIAS`.
+
+
 

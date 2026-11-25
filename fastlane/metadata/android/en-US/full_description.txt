@@ -1,0 +1,8 @@
+Motoopaint is a 100% offline Android paint intelligence, vehicle colour lookup, and workshop studio built for Kenya's automotive painters, panel beaters, colour technicians, and nganya customisation artists.
+
+Features:
+- Kenya-first Room vehicle & OEM paint catalogue with explicit provenance and standard colour aliases
+- CameraX bay scanner, Car Photo Library, and interactive Photo Painter with Before/After split slider
+- Nganya & fleet Livery Studio for Kenyan vehicle templates with PNG export
+- Offline job logbook, technician formulas, spray-out records, and KSh stock inventory tracking
+- Local JSON backup & restore via Android Storage Access Framework with zero internet permission
