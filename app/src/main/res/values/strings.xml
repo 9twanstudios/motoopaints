@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Motoopaint</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_colours">Colours</string>
+    <string name="nav_studio">Studio</string>
+    <string name="nav_jobs">Jobs</string>
+    <string name="nav_more">More</string>
+    <string name="offline_badge">100% Offline • Local Vault</string>
+    <string name="approximation_warning">Screen swatches &amp; previews are digital approximations. Always verify OEM code and spray-out test card in natural light before full mix.</string>
+    <string name="camera_permission_rationale">Camera access lets you photograph customer vehicles directly in the bay for panel masking and job records.</string>
+</resources>

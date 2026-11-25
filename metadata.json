@@ -1,0 +1,6 @@
+{
+  "name": "Motoopaint",
+  "description": "Offline Kenyan automotive paint studio, OEM colour lookup, photo painter, nganya livery designer, job book, and workshop stock tracker.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
